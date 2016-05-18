@@ -113,6 +113,25 @@ class WartsReader(object):
      ('usrid', self.read_uint32_t),
     ]
 
+    self.tracebox_flags = [
+     ('listid', self.read_uint32_t),
+     ('cycleid', self.read_uint32_t),
+     ('usrid', self.read_uint32_t),
+     ('srcaddr', self.read_address),
+     ('dstaddr', self.read_address),
+     ('srcport', self.read_uint16_t),
+     ('dstport', self.read_uint16_t),
+     ('timeval', self.read_timeval),
+     ('res', self.read_uint16_t),
+     ('rtt', self.read_uint8_t),
+     ('icmpquote', self.read_uint8_t),
+     ('udp', self.read_uint8_t),
+     ('pmode', self.read_uint8_t),
+     ('pvalue', self.read_uint8_t),
+     ('pktc16', self.read_uint16_t),
+     ('pktc32', self.read_uint32_t),
+    ]
+
     self.hop_flags = [
      ('addrid', self.read_referenced_address),
      ('probettl', self.read_uint8_t),
@@ -133,6 +152,11 @@ class WartsReader(object):
      ('icmpext', self.read_icmpext),
      ('addr', self.read_address),
     ]
+    self.pkt_flags = [
+     ('dir', self.read_uint8_t),
+     ('time', self.read_timeval),
+     ('data', self.read_pktdata),
+    ]
 
   def next(self):
     while True:
@@ -150,10 +174,12 @@ class WartsReader(object):
         return self.read_trace()
       elif obj == 0x07: 
         return self.read_ping()
+      elif obj == 0x0c: 
+        return self.read_tracebox()
       else: 
         print "Unsupported object: %02x Len: %d" % (obj, length)
 
-  def read_flags(self, flag_defines):
+  def read_flags(self, flag_defines, forced_flags=None):
     """ Warts flag magic. """
     flags_set = []
     while True:
@@ -161,7 +187,11 @@ class WartsReader(object):
       #print "FLAG: %02X" % flag
       flags_set += [self.bit_set(flag, i) for i in range(1,8)]
       if not self.more_flags(flag): break
+    if forced_flags:
+      flag = forced_flags
+      flags_set = [True]*forced_flags
     flags = dict()
+
     if flag > 0 or len(flags_set) > 8:
       paramlen = self.read_uint16_t(self.fd)
       #print "PARAMLEN:", paramlen
@@ -172,6 +202,12 @@ class WartsReader(object):
           #print "Flag %d: %s %s" % (i+1, flag_defines[i][0], val)
           flags[flag_defines[i][0]] = val
     return flags
+
+  @staticmethod
+  def read_pktdata(f):
+    l = WartsReader.read_uint16_t(f)
+    buf = f.read(l)
+    return WartsReader.hexdump(buf)
 
   def read_trace(self):
     # deprecated (type 5) referenced addresses are trace-global
@@ -220,6 +256,21 @@ class WartsReader(object):
       pings.append(ping)
       if verbose: print "Reply %d: %s:" % (i+1, ping)
     return (flags, pings)
+
+  def read_tracebox(self):
+    hops = []
+    flags = self.read_flags(self.tracebox_flags)
+    if self.verbose: print "Flags:", flags
+    records = flags['pktc32']
+    if self.verbose: print "Hops recorded:", records
+    for record in range(records):
+      hflags = self.read_flags(self.pkt_flags, forced_flags=3)
+      hops.append(hflags)
+      if self.verbose: print "\t", hflags
+    end = WartsReader.read_uint16_t(self.fd)
+    assert (end == 0)
+    return (flags, hops)
+  
 
   def read_list(self):
     wlistid = self.read_uint32_t(self.fd)
