@@ -11,5 +11,3 @@ utilities by providing native python implementations.
 * sc_warts.py:         warts file processing library
 * sc_wartsdump.py:     parse binary warts files
 * sc_sample.py:        sample python using warts class
-* sc_analysis_dump.py: covert scamper traces to easily parsed text
-* sc_attach.py:        interact with scamper over control socket

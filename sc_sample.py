@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Program:      $Id: $ 
 # Author:       Robert Beverly <rbeverly@nps.edu>
@@ -17,4 +17,4 @@ if __name__ == "__main__":
     (flags, hops) = w.next()
     if flags == False: break
     dsts.add(flags['dstaddr'])
-  print "Found %d probed destinations in %s." % (len(dsts), sys.argv[1])
+  print("Found %d probed destinations in %s." % (len(dsts), sys.argv[1]))
