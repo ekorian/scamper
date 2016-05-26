@@ -434,17 +434,16 @@ def warts_open(infile):
 
 class BinWartsReader(WartsReader):
   
-  offset = 0
-
   def __init__(self, bytes, verbose=False):
     super().__init__(None, verbose=verbose)
     self.fd = bytes
+    self.offset = 0
 
   def read_header(self):
     """ read warts object header """
-    ioffset = BinWartsReader.offset
+    ioffset = self.offset
     buf     = self.fd[ioffset:ioffset+8]
-    BinWartsReader.offset += 8
+    self.offset += 8
     if len(buf) != 8:
       return (-1, -1)
     (magic, obj, length) = struct.unpack('!HHI', buf)
@@ -456,24 +455,24 @@ class BinWartsReader(WartsReader):
 
   def read_pktdata(self, bytes):
     l       = self.read_uint16_t(bytes)
-    ioffset = BinWartsReader.offset
+    ioffset = self.offset
     buf     = self.fd[ioffset:ioffset+l]
-    BinWartsReader.offset += l
+    self.offset += l
     return self.hexdump(buf)
 
   def read_uint8_t(self, bytes):
-    ioffset = BinWartsReader.offset
-    BinWartsReader.offset += 1
+    ioffset = self.offset
+    self.offset += 1
     return (struct.unpack_from('B', bytes, offset=ioffset))[0]
 
   def read_uint16_t(self, bytes):
-    ioffset = BinWartsReader.offset
-    BinWartsReader.offset += 2
+    ioffset = self.offset
+    self.offset += 2
     return (struct.unpack_from('!H', bytes, offset=ioffset))[0]
 
   def read_uint32_t(self, bytes):
-    ioffset = BinWartsReader.offset
-    BinWartsReader.offset += 4
+    ioffset = self.offset
+    self.offset += 4
     return (struct.unpack_from('!I', bytes, offset=ioffset))[0]
 
   def read_icmpext(self, bytes):
@@ -483,8 +482,8 @@ class BinWartsReader(WartsReader):
     it = self.read_uint8_t(bytes)
     psize = l-2
 
-    ioffset = BinWartsReader.offset
-    BinWartsReader.offset += psize
+    ioffset = self.offset
+    self.offset += psize
     buf = bytes[ioffset:ioffset+psize]
 
     return "class: " + str(ic) + " type: " + str(it) + " buf: " + self.hexdump(buf)
@@ -493,8 +492,8 @@ class BinWartsReader(WartsReader):
     """ read a null terminated string """
     s = ''
     while True:
-      ioffset = BinWartsReader.offset
-      BinWartsReader.offset += 1
+      ioffset = self.offset
+      self.offset += 1
       b = bytes[ioffset:ioffset+1]
       if len(b) != 1: break
       if ord(b) == 0x00: break
@@ -509,8 +508,8 @@ class BinWartsReader(WartsReader):
     # an embedded (non-referenced) address
     if length != 0:
       typ = self.read_uint8_t(fd)
-      ioffset = BinWartsReader.offset
-      BinWartsReader.offset += length
+      ioffset = self.offset
+      self.offset += length
       addr = self.fd[ioffset:ioffset+length]
       addr_id = len(self.address_ref)
       self.address_ref[addr_id] = addr 
