@@ -5,14 +5,30 @@
 # Description:  Parse a binary warts capture according to warts.5
 #
 import sys
-from sc_warts import WartsReader
+from sc_warts import WartsReader, BinWartsReader
+from itertools import *
 
+def wartsdump(bytes): 
+  w = BinWartsReader(bytes)
 
+  exported = []
+  while True:
+    (flags, hops) = w.next()
+    if flags == False: break  
+    exported.append({"meta":flags, "pkts":hops})
+  return exported
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
 
-  w = WartsReader(sys.argv[1], verbose=True)
+  bin_input = False
+  if bin_input:
+    with open(sys.argv[1], 'rb') as f:
+      data = f.read()
+    w = BinWartsReader(data, verbose=True)
+  else:
+    w = WartsReader(sys.argv[1], verbose=True)
+
   while True:
     (flags, hops) = w.next()
     if flags == False: break

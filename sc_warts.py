@@ -16,7 +16,8 @@ class WartsReader(object):
     # Auto-detect if warts file is using deprecated, type=5 addresses
     self.deprecated_addresses = False
     self.wartsfile = wartsfile
-    self.fd = warts_open(self.wartsfile)
+    if self.wartsfile:
+      self.fd = warts_open(self.wartsfile)
 
     # For each object, define a list of optional variables that may be
     # in the record (dependent on flags indicator) and the callback 
@@ -203,11 +204,10 @@ class WartsReader(object):
           flags[flag_defines[i][0]] = val
     return flags
 
-  @staticmethod
-  def read_pktdata(f):
-    l = WartsReader.read_uint16_t(f)
+  def read_pktdata(self, f):
+    l = self.read_uint16_t(f)
     buf = f.read(l)
-    return WartsReader.hexdump(buf)
+    return self.hexdump(buf)
 
   def read_trace(self):
     # deprecated (type 5) referenced addresses are trace-global
@@ -240,7 +240,7 @@ class WartsReader(object):
         del hflags['icmp']
       hops.append(hflags)
       if self.verbose: print("\t", hflags)
-    end = WartsReader.read_uint16_t(self.fd)
+    end = self.read_uint16_t(self.fd)
     assert (end == 0)
     return (flags, hops)
 
@@ -267,10 +267,9 @@ class WartsReader(object):
       hflags = self.read_flags(self.pkt_flags, forced_flags=3)
       hops.append(hflags)
       if self.verbose: print("\t", hflags)
-    end = WartsReader.read_uint16_t(self.fd)
+    end = self.read_uint16_t(self.fd)
     assert (end == 0)
     return (flags, hops)
-  
 
   def read_list(self):
     wlistid = self.read_uint32_t(self.fd)
@@ -314,8 +313,8 @@ class WartsReader(object):
     """ Read a warts deprecated (type 5) style referenced address """
     # deprecated address references start at 1
     addr_id = len(self.address_ref) + 1
-    id_mod = read_uint8_t(self.fd)
-    typ = read_uint8_t(self.fd)
+    id_mod = self.read_uint8_t(self.fd)
+    typ = self.read_uint8_t(self.fd)
     # "reader...can sanity check the ID number it determines by comparing the
     # lower 8 bits of the computed ID with the ID that is embedded in the record"
     assert(addr_id % 255 == id_mod)
@@ -333,18 +332,18 @@ class WartsReader(object):
 
   def read_address(self, fd):
     """ read a warts-style ip/mac address """
-    length = WartsReader.read_uint8_t(self.fd)
-    addr = 0
-    typ = 0
+    length = self.read_uint8_t(self.fd)
+    addr   = 0
+    typ    = 0
     # an embedded (non-referenced) address
     if length != 0:
-      typ = WartsReader.read_uint8_t(fd)
+      typ = self.read_uint8_t(fd)
       addr = self.fd.read(length)
       addr_id = len(self.address_ref)
       self.address_ref[addr_id] = addr 
     # a referenced address
     else:
-      addr_id = WartsReader.read_uint32_t(fd)
+      addr_id = self.read_uint32_t(fd)
       try:
         addr = self.address_ref[addr_id]
       except:
@@ -368,49 +367,40 @@ class WartsReader(object):
     addr = self.address_ref[addr_id]
     return addr
 
-  @staticmethod
-  def more_flags(b):
+  def more_flags(self, b):
     """ Is high order bit set on flag byte? """
     return (b & 0x80 == 0x80)
 
-  @staticmethod
-  def hexdump(buf):
+  def hexdump(self, buf):
     return ''.join('{:02x}'.format(x) for x in buf)
   
-  @staticmethod
-  def bit_set(b, i):
+  def bit_set(self, b, i):
     """ Warts flag magic: is the i'th bit of byte b set to 1? """
     return ( (b >> (i-1)) & 0x01 == 0x01)
 
-  @staticmethod
-  def read_uint8_t(f):
+  def read_uint8_t(self, f):
     return (struct.unpack('B', f.read(1)))[0]
 
-  @staticmethod
-  def read_uint16_t(f):
+  def read_uint16_t(self, f):
     return (struct.unpack('!H', f.read(2)))[0]
 
-  @staticmethod
-  def read_uint32_t(f):
+  def read_uint32_t(self, f):
     return (struct.unpack('!I', f.read(4)))[0]
 
-  @staticmethod
-  def read_timeval(f):
-    sec = WartsReader.read_uint32_t(f)
-    usec = WartsReader.read_uint32_t(f)
+  def read_timeval(self, f):
+    sec = self.read_uint32_t(f)
+    usec = self.read_uint32_t(f)
     return (sec + usec/1000000.0)
 
-  @staticmethod
-  def read_icmpext(f):
+  def read_icmpext(self, f):
     """ read ICMP extension header """
-    l = WartsReader.read_uint16_t(f)
-    ic = WartsReader.read_uint8_t(f)
-    it = WartsReader.read_uint8_t(f)
+    l = self.read_uint16_t(f)
+    ic = self.read_uint8_t(f)
+    it = self.read_uint8_t(f)
     buf = f.read(l-2)
-    return "class: " + str(ic) + " type: " + str(it) + " buf: " + WartsReader.hexdump(buf)
+    return "class: " + str(ic) + " type: " + str(it) + " buf: " + self.hexdump(buf)
 
-  @staticmethod
-  def read_string(f):
+  def read_string(self, f):
     """ read a null terminated string """
     s = ''
     while True:
@@ -441,6 +431,107 @@ def warts_open(infile):
     pass
   return open(infile, 'rb')
 
+
+class BinWartsReader(WartsReader):
+  
+  offset = 0
+
+  def __init__(self, bytes, verbose=False):
+    super().__init__(None, verbose=verbose)
+    self.fd = bytes
+
+  def read_header(self):
+    """ read warts object header """
+    ioffset = BinWartsReader.offset
+    buf     = self.fd[ioffset:ioffset+8]
+    BinWartsReader.offset += 8
+    if len(buf) != 8:
+      return (-1, -1)
+    (magic, obj, length) = struct.unpack('!HHI', buf)
+    if self.verbose:
+      print("Magic: %02X Obj: %02X Len: %02x" % (magic, obj, length))
+    if magic != 0x1205:
+      return (-1, -1)
+    return (obj, length)
+
+  def read_pktdata(self, bytes):
+    l       = self.read_uint16_t(bytes)
+    ioffset = BinWartsReader.offset
+    buf     = self.fd[ioffset:ioffset+l]
+    BinWartsReader.offset += l
+    return self.hexdump(buf)
+
+  def read_uint8_t(self, bytes):
+    ioffset = BinWartsReader.offset
+    BinWartsReader.offset += 1
+    return (struct.unpack_from('B', bytes, offset=ioffset))[0]
+
+  def read_uint16_t(self, bytes):
+    ioffset = BinWartsReader.offset
+    BinWartsReader.offset += 2
+    return (struct.unpack_from('!H', bytes, offset=ioffset))[0]
+
+  def read_uint32_t(self, bytes):
+    ioffset = BinWartsReader.offset
+    BinWartsReader.offset += 4
+    return (struct.unpack_from('!I', bytes, offset=ioffset))[0]
+
+  def read_icmpext(self, bytes):
+    """ read ICMP extension header """
+    l  = self.read_uint16_t(bytes)
+    ic = self.read_uint8_t(bytes)
+    it = self.read_uint8_t(bytes)
+    psize = l-2
+
+    ioffset = BinWartsReader.offset
+    BinWartsReader.offset += psize
+    buf = bytes[ioffset:ioffset+psize]
+
+    return "class: " + str(ic) + " type: " + str(it) + " buf: " + self.hexdump(buf)
+
+  def read_string(self, bytes):
+    """ read a null terminated string """
+    s = ''
+    while True:
+      ioffset = BinWartsReader.offset
+      BinWartsReader.offset += 1
+      b = bytes[ioffset:ioffset+1]
+      if len(b) != 1: break
+      if ord(b) == 0x00: break
+      s += b.decode('utf-8')
+    return s
+
+  def read_address(self, fd):
+    """ read a warts-style ip/mac address """
+    length = self.read_uint8_t(self.fd)
+    addr   = 0
+    typ    = 0
+    # an embedded (non-referenced) address
+    if length != 0:
+      typ = self.read_uint8_t(fd)
+      ioffset = BinWartsReader.offset
+      BinWartsReader.offset += length
+      addr = self.fd[ioffset:ioffset+length]
+      addr_id = len(self.address_ref)
+      self.address_ref[addr_id] = addr 
+    # a referenced address
+    else:
+      addr_id = self.read_uint32_t(fd)
+      try:
+        addr = self.address_ref[addr_id]
+      except:
+        print("Die: couldn't find referenced address %d" % addr_id)
+        sys.exit(-1)
+    if typ == 0:
+      if len(addr) == 4: typ = 1
+      if len(addr) == 16: typ = 2
+    if typ == 1:
+      return socket.inet_ntop(socket.AF_INET, addr)
+    elif typ == 2:
+      return socket.inet_ntop(socket.AF_INET6, addr)
+    else:
+      print("Addr type:", typ, "not implemented")
+      assert False
 
 if __name__ == "__main__":
   assert len(sys.argv) == 2
