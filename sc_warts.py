@@ -159,10 +159,10 @@ class WartsReader(object):
      ('data', self.read_pktdata),
     ]
 
-  def next(self):
+  def __next__(self):
     while True:
       (obj, length) = self.read_header()
-      if obj == -1: return (False, False)
+      if obj == -1: raise StopIteration()
       #print("Object: %02x Len: %d" % (obj, length))
       if obj == 0x01: self.read_list()
       elif obj == 0x02: self.read_cycle()
@@ -179,6 +179,15 @@ class WartsReader(object):
         return self.read_tracebox()
       else: 
         print("Unsupported object: %02x Len: %d" % (obj, length))
+  
+  def __iter__(self):
+    return self
+  
+  def next(self):
+    try:
+      return self.__next__()
+    except StopIteration:
+      return False, False
 
   def read_flags(self, flag_defines, forced_flags=None):
     """ Warts flag magic. """
